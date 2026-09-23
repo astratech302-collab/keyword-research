@@ -55,6 +55,66 @@ can finish just after `max_cost_usd` is reached. The possible overrun is bounded
 
 ## Pipeline
 
+The diagram uses explicit high-contrast colours so it remains readable in both GitHub light and dark modes.
+
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"lineColor": "#475569", "fontFamily": "Arial, sans-serif"}}}%%
+flowchart TD
+    START(["Domain + configuration"])
+
+    START --> SITE["1. Crawl and understand the site<br/>Classify pages and build the business model"]
+    SITE --> FOOTPRINT["2. Measure the existing footprint<br/>Collect the site's ranking keywords"]
+    FOOTPRINT --> COMPETITORS["3. Find and vet competitors<br/>Collect their top-ranking keywords"]
+    COMPETITORS --> DISCOVERY["4. Discover keyword candidates<br/>Site keywords, ideas and suggestions"]
+    DISCOVERY --> FILTER{"5. Is the keyword useful?<br/>Rules + LLM relevance score"}
+
+    FILTER -- "No" --> DROP["Drop keyword<br/>and record the reason"]
+    FILTER -- "Yes" --> ENRICH["6. Enrich missing metrics<br/>Volume, CPC, difficulty, intent and trends"]
+    ENRICH --> CLUSTER["7. Build keyword clusters<br/>Intent split + lexical and semantic similarity"]
+    CLUSTER --> PRESCORE["8. Calculate opportunity<br/>SEO score + business-value score"]
+    PRESCORE --> SERP["9. Inspect live search results<br/>for the highest-priority clusters"]
+    SERP --> MAP{"10. Map each cluster to the site<br/>Is there a suitable existing page?"}
+
+    MAP --> OUTCOMES["Good page · Weak page · Wrong page type<br/>Content gap · Cannibalization · Irrelevant"]
+    OUTCOMES --> ACTION["11. Choose the recommended action<br/>Improve · Create · Consolidate · Maintain · Ignore"]
+    ACTION --> ORDER["12. Estimate effort and rank priorities"]
+    ORDER --> REPORT["HTML report + clusters.csv + keywords.csv"]
+
+    DFS[("DataForSEO<br/>SEO facts and metrics")]
+    LLM[("OpenRouter LLM<br/>Contextual judgements")]
+    DB[("SQLite<br/>Cache, history and checkpoints")]
+
+    DFS -. "rankings and metrics" .-> FOOTPRINT
+    DFS -. "competitor data" .-> COMPETITORS
+    DFS -. "keyword data" .-> DISCOVERY
+    DFS -. "missing metrics" .-> ENRICH
+    DFS -. "live results" .-> SERP
+
+    LLM -. "site understanding" .-> SITE
+    LLM -. "competitor vetting" .-> COMPETITORS
+    LLM -. "relevance" .-> FILTER
+    LLM -. "page mapping" .-> MAP
+
+    SITE -. "cache and checkpoint" .-> DB
+    REPORT -. "read saved results" .-> DB
+
+    classDef input fill:#FEF3C7,stroke:#92400E,color:#111827,stroke-width:2px;
+    classDef process fill:#DBEAFE,stroke:#1D4ED8,color:#111827,stroke-width:2px;
+    classDef decision fill:#FDE68A,stroke:#B45309,color:#111827,stroke-width:3px;
+    classDef result fill:#DCFCE7,stroke:#15803D,color:#111827,stroke-width:2px;
+    classDef rejected fill:#FFE4E6,stroke:#BE123C,color:#111827,stroke-width:2px;
+    classDef service fill:#F3E8FF,stroke:#7E22CE,color:#111827,stroke-width:2px;
+    classDef store fill:#E2E8F0,stroke:#334155,color:#111827,stroke-width:2px;
+
+    class START input;
+    class SITE,FOOTPRINT,COMPETITORS,DISCOVERY,ENRICH,CLUSTER,PRESCORE,SERP,ACTION,ORDER process;
+    class FILTER,MAP decision;
+    class OUTCOMES,REPORT result;
+    class DROP rejected;
+    class DFS,LLM service;
+    class DB store;
+```
+
 | # | Phase | Source | Output |
 |---|-------|--------|--------|
 | 1 | `site` | crawler + LLM | pages (type, topics, conversion value) and a business model with seed topics |
