@@ -1,0 +1,169 @@
+# kwresearch config for Whites & Pastels (https://whitespastels.com)
+# Run:  kwresearch run --config configs/whitespastels.com.yaml
+#
+# Business summary (from the site, Sep 2026): Bengaluru-based Shopify D2C store selling
+# European-style luxury tableware, serveware and home decor at "affordable luxury" prices
+# (~₹699–₹42,999), with a strong gifting angle. Ships across India, INR pricing.
+
+domain: whitespastels.com
+country: India
+language: English
+language_code: en
+
+business_type: D2C e-commerce store (Shopify) - luxury tableware, serveware & home decor
+goal: >-
+  online sales - rank collection (category) pages and product pages for buyer-intent
+  searches; use blog/guides only where they support those pages or gifting occasions
+target_customer: >-
+  urban Indian households (25-45) furnishing or upgrading their homes, people who host
+  guests, and gift-buyers looking for premium-looking but affordable decor, tableware
+  and gift sets (weddings, housewarming, Diwali, Rakhi, corporate gifting)
+
+# Core categories - seeds for the site model and relevance scoring.
+products:
+  - luxury tableware and serveware
+  - tea cups and saucers / teaware
+  - cups, mugs and luxury glassware
+  - kettles, teapots and carafes
+  - cutlery sets and cutlery holders (gold / silver finish)
+  - serving bowls, platters and serving trays
+  - dining table essentials (napkin rings, table accessories)
+  - bar accessories (wine openers, cocktail stirrers)
+  - decorative vases
+  - sculptures, showpieces and decor objects
+  - brass urli and candle holders
+  - tissue box holders
+  - wall decor
+  - curtain tiebacks
+  - soft furnishings
+  - gift sets and gifting collection
+
+# Known competitors (verified to sell premium tableware/decor online in India).
+# The pipeline also discovers SEO competitors automatically and vets them.
+competitors:
+  - nestasia.in
+  - ellementry.com
+
+brand_terms:
+  - whites and pastels
+  - whites & pastels
+  - whitespastels
+  - whites pastels
+
+# Marketplaces and giants: real competitors in Google, but not ones whose keyword
+# strategy a D2C store can copy. (This list REPLACES the default, so defaults are repeated.)
+exclude_domains:
+  - wikipedia.org
+  - youtube.com
+  - reddit.com
+  - quora.com
+  - linkedin.com
+  - medium.com
+  - facebook.com
+  - instagram.com
+  - x.com
+  - twitter.com
+  - pinterest.com
+  - pinterest.in
+  - google.com
+  - amazon.in
+  - amazon.com
+  - flipkart.com
+  - myntra.com
+  - ajio.com
+  - nykaa.com
+  - nykaafashion.com
+  - tatacliq.com
+  - meesho.com
+  - jiomart.com
+  - snapdeal.com
+  - indiamart.com
+  - pepperfry.com
+  - ikea.com
+  - justdial.com
+
+# Added on top of the default negatives (jobs, salary, course, pdf, login, ...).
+exclude_keywords:
+  - diy
+  - drawing
+  - sketch
+  - clipart
+  - png
+  - images
+  - wallpaper
+  - coloring
+  - how to make
+  - recipe
+  - second hand
+  - repair
+  - wholesale
+  - manufacturer
+  - manufacturers
+  - supplier
+  - suppliers
+  - bulk
+  - amazon
+  - flipkart
+  - meesho
+  - ikea
+
+# E-commerce: buying searches are worth far more than informational ones.
+intent_value:
+  transactional: 100
+  commercial: 90
+  informational: 35
+  navigational: 10
+
+# Skip faceted / price / discount / utility collections - they are not SEO targets.
+crawl_exclude:
+  - ^/collections/under-
+  - ^/collections/offers
+  - ^/collections/out-of-stock
+  - ^/collections/frontpage
+  - ^/collections/all$
+  - ^/collections/instagram-shop
+  - ^/collections/.*-copy$
+  - ^/collections/[^/]+/products/     # duplicate product URLs under collections
+  - ^/policies/
+  - ^/pages/(contact|shipping|refund|return|terms|privacy)
+
+llm:
+  fast: google/gemini-3.8-flash        # check ids at https://openrouter.ai/models
+  smart: anthropic/claude-opus-5.5
+  temperature: 0
+
+limits:
+  max_crawl_pages: 150                 # collections first, then products, then blog
+  max_competitors: 5
+  competitor_keywords_per_domain: 1000
+  own_ranked_keywords: 2000
+  keywords_for_site: 1000
+  keyword_ideas: 1000
+  suggestion_seeds: 15                 # many distinct product categories
+  suggestions_per_seed: 200
+  max_candidates: 5000
+  min_search_volume: 10                # keep long-tail product terms
+  serp_checks: 60
+  llm_mapping_clusters: 150
+  max_cost_usd: 5                      # first run: keep it small, raise once output looks right
+  llm_workers: 12                      # concurrent OpenRouter calls (1 disables parallelism)
+  dataforseo_workers: 5                # concurrent DataForSEO calls; provider limit is 30
+
+weights:
+  # SEO opportunity
+  demand: 0.30
+  feasibility: 0.30                    # smaller store -> difficulty matters a lot
+  existing_rank: 0.20
+  competitor_gap: 0.10
+  trend: 0.10                          # captures seasonal gifting peaks (Diwali, Rakhi, weddings)
+  # Business value
+  relevance: 0.55
+  intent: 0.30
+  cpc: 0.15
+
+thresholds:
+  ignore_below_business_value: 40
+  quick_win_positions: [4, 30]
+  quick_win_max_kd: 55
+  strategic_min_kd: 55
+  min_relevance_to_keep: 2

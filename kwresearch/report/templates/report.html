@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SEO opportunities · {{ cfg.domain }}</title>
+<style>
+:root{--bg:#f7f7f5;--card:#fff;--ink:#1d1f23;--mute:#666b73;--line:#e3e3df;--accent:#1a9e5c;--hot:rgba(26,158,92,.07)}
+@media (prefers-color-scheme:dark){:root{--bg:#141517;--card:#1c1e21;--ink:#e8e8e6;--mute:#9a9ea5;--line:#2c2f33;--hot:rgba(26,158,92,.12)}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif}
+.wrap{max-width:1180px;margin:0 auto;padding:32px 20px 80px}
+h1{font-size:26px;margin:0 0 4px}h2{font-size:19px;margin:44px 0 6px}h3{font-size:15px;margin:0 0 6px}
+.sub{color:var(--mute)}.sub b{color:var(--ink)}
+nav{display:flex;flex-wrap:wrap;gap:6px 14px;margin:18px 0 8px;font-size:13px}nav a{color:var(--mute);text-decoration:none}nav a:hover{color:var(--ink)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:18px}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px}
+.tile .n{font-size:24px;font-weight:650}.tile .l{color:var(--mute);font-size:12px}
+.answers{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;margin-top:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px}
+table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden;font-size:13px}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--mute);background:var(--card)}
+td.r,th.r{text-align:right;font-variant-numeric:tabular-nums}
+tr:last-child td{border-bottom:0}
+.tag{display:inline-block;padding:1px 8px;border-radius:99px;font-size:11px;font-weight:600;color:#fff;white-space:nowrap}
+.pill{display:inline-block;padding:0 7px;border:1px solid var(--line);border-radius:99px;font-size:11px;color:var(--mute);margin:1px 2px 1px 0}
+.bar{height:6px;border-radius:3px;background:var(--line);min-width:60px;position:relative}.bar i{position:absolute;inset:0 auto 0 0;border-radius:3px;background:var(--accent)}
+.kw{color:var(--mute);font-size:12px}
+td.cl{min-width:200px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:12px}
+.scatter{width:100%;max-width:760px;background:var(--card);border:1px solid var(--line);border-radius:10px}
+.scatter .grid{stroke:var(--line)}.scatter .tick{fill:var(--mute);font-size:10px}.scatter .axis{fill:var(--mute);font-size:11px}.scatter .q-hot{fill:var(--hot)}
+.legend{display:flex;flex-wrap:wrap;gap:10px;margin:8px 0;font-size:12px;color:var(--mute)}.legend span:before{content:"";display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--c);margin-right:5px}
+.warn{background:#fff4e5;color:#7a4b00;border:1px solid #f2d19b;padding:10px 14px;border-radius:8px;margin-top:14px}
+ul.tight{margin:6px 0 0;padding-left:18px}ul.tight li{margin:2px 0}
+a{color:inherit}.scroll{overflow-x:auto}
+</style>
+</head>
+<body><div class="wrap">
+
+<h1>SEO opportunities for {{ cfg.domain }}</h1>
+<div class="sub">{{ sm.one_liner or sm.company }} · <b>{{ cfg.country }}</b> / {{ cfg.language }} · run #{{ run.id }} · {{ generated }}</div>
+{% if budget_hit %}<div class="warn">DataForSEO budget cap was reached during this run - results are based on partial data. Raise <code>limits.max_cost_usd</code> and re-run with <code>--resume</code>.</div>{% endif %}
+
+<nav>
+  <a href="#summary">Summary</a><a href="#top">Top opportunities</a><a href="#matrix">Matrix</a>
+  <a href="#existing">Existing pages</a><a href="#new">New pages</a><a href="#supporting">Supporting content</a>
+  {% if consolidate %}<a href="#consolidate">Cannibalisation</a>{% endif %}<a href="#ignored">Ignored</a>
+  <a href="#competitors">Competitors</a><a href="#method">Method &amp; cost</a>
+</nav>
+
+<h2 id="summary">Executive summary</h2>
+<div class="tiles">
+  <div class="tile"><div class="n">{{ stats.pool|num }}</div><div class="l">keywords collected</div></div>
+  <div class="tile"><div class="n">{{ stats.kept|num }}</div><div class="l">relevant after filtering</div></div>
+  <div class="tile"><div class="n">{{ stats.clusters|num }}</div><div class="l">topic clusters</div></div>
+  <div class="tile"><div class="n">{{ stats.actionable|num }}</div><div class="l">actionable opportunities</div></div>
+  <div class="tile"><div class="n">{{ stats.ranked|num }}</div><div class="l">keywords you rank for today</div></div>
+</div>
+<div class="answers">
+  <div class="card"><h3>1 · Which existing pages should I improve?</h3>
+    <b>{{ stats.pages_to_improve }}</b> pages ({{ stats.quick_wins }} quick-win clusters already ranking #4-30).
+    <ul class="tight">{% for p in existing_pages[:5] %}<li><a href="{{ p.url }}">{{ p.url|path }}</a> <span class="kw">- {{ p.clusters|length }} cluster(s), {{ p.volume|num }}/mo</span></li>{% endfor %}</ul></div>
+  <div class="card"><h3>2 · Which new pages should I create?</h3>
+    <b>{{ stats.new_landing }}</b> landing pages, <b>{{ stats.new_articles }}</b> supporting articles{% if stats.strategic %}, <b>{{ stats.strategic }}</b> long-term strategic targets{% endif %}.
+    <ul class="tight">{% for c in new_pages[:5] %}<li>{{ c.primary_keyword }} <span class="kw">- {{ c.volume|num }}/mo, {{ c.intent }}</span></li>{% endfor %}</ul></div>
+  <div class="card"><h3>3 · In what order?</h3>
+    Work top-down through the table below. Order = priority (geometric mean of SEO opportunity and business value), discounted by effort.
+    {% if stats.consolidate %}<br><br>Fix <b>{{ stats.consolidate }}</b> cannibalised topic(s) first - they hold back pages that already rank.{% endif %}</div>
+</div>
+
+<h2 id="top">Top opportunities</h2>
+<div class="sub">SEO = how winnable &amp; how much demand. Business = how valuable the searcher is to you. Both 0-100.</div>
+<div class="scroll"><table>
+<tr><th>#</th><th>Cluster</th><th class="r">Volume</th><th class="r">KD</th><th>Intent</th><th class="r">Rank</th><th class="r">SEO</th><th class="r">Business</th><th class="r">Effort</th><th>Action</th><th>Recommendation</th></tr>
+{% for c in top %}
+<tr><td>{{ c.rank }}</td>
+<td class="cl"><b>{{ c.primary_keyword }}</b><div class="kw">{{ c.keywords[1:4]|join(", ") }}{% if c.size > 4 %} +{{ c.size-4 }}{% endif %}</div></td>
+<td class="r">{{ c.volume|num }}</td><td class="r">{{ c.kd|num }}</td><td>{{ c.intent }}</td>
+<td class="r">{{ c.best_position or "—" }}</td><td class="r">{{ c.seo_score|num }}</td><td class="r">{{ c.business_score|num }}</td><td class="r">{{ c.effort|num }}</td>
+<td><span class="tag" style="background:{{ c.color }}">{{ action_label[c.action] }}</span><div class="kw">{{ c.quadrant }}</div></td>
+<td>{{ c.recommendation }}<div class="kw">{{ c.action_reason }}</div></td></tr>
+{% endfor %}
+</table></div>
+
+<h2 id="matrix">Opportunity matrix</h2>
+<div class="sub">Each dot is a cluster (size = search volume). The shaded top-right quadrant is where to invest.</div>
+<div class="legend">{% for a, col in action_color.items() %}<span style="--c:{{ col }}">{{ action_label[a] }}</span>{% endfor %}</div>
+{{ scatter|safe }}
+
+<h2 id="existing">Existing-page opportunities</h2>
+<div class="sub">Pages that already exist (and usually already rank) for these clusters. Cheapest wins.</div>
+<div class="grid2">
+{% for p in existing_pages %}
+<div class="card"><h3><a href="{{ p.url }}">{{ p.url|path }}</a></h3>
+<div class="kw">{{ p.volume|num }} combined monthly searches</div>
+<ul class="tight">{% for c in p.clusters %}
+<li><span class="tag" style="background:{{ c.color }}">{{ c.best_position and '#' ~ c.best_position or 'not ranking' }}</span> <b>{{ c.primary_keyword }}</b> <span class="kw">{{ c.volume|num }}/mo · KD {{ c.kd|num }}</span>
+{% if c.mapping and c.mapping.content_notes %}<ul class="tight kw">{% for n in c.mapping.content_notes %}<li>{{ n }}</li>{% endfor %}</ul>{% endif %}</li>
+{% endfor %}</ul></div>
+{% else %}<div class="card">No existing-page opportunities found.</div>{% endfor %}
+</div>
+
+<h2 id="new">New pages to create</h2>
+<div class="sub">Commercial/transactional clusters with no suitable page, plus long-term strategic targets.</div>
+<div class="grid2">
+{% for c in new_pages %}
+<div class="card">
+<span class="tag" style="background:{{ c.color }}">{{ action_label[c.action] }}</span> <span class="kw">priority {{ c.priority|num }} · rank #{{ c.rank }}</span>
+<h3 style="margin-top:8px">{{ (c.mapping and c.mapping.suggested_slug) or c.primary_keyword }}</h3>
+<div><b>Primary:</b> {{ c.primary_keyword }} <span class="kw">({{ c.primary_volume|num }}/mo)</span></div>
+<div><b>Secondary:</b> <span class="kw">{{ c.keywords[1:8]|join(", ") or "—" }}</span></div>
+<div><b>Cluster demand:</b> ~{{ c.volume|num }}/mo · <b>Intent:</b> {{ c.intent }} · <b>KD:</b> {{ c.kd|num }}</div>
+{% if c.mapping and c.mapping.recommended_page_type %}<div><b>Page type:</b> {{ c.mapping.recommended_page_type }}</div>{% endif %}
+{% if c.serp %}<div><b>SERP:</b> mostly {{ c.serp.dominant_page_type }} {% for d in c.serp.top_domains[:5] %}<span class="pill">{{ d }}</span>{% endfor %}</div>{% endif %}
+{% if c.competitors_ranking %}<div><b>Competitors in top 20:</b> {% for d, p in c.competitors_ranking.items() %}<span class="pill">{{ d }} #{{ p }}</span>{% endfor %}</div>{% endif %}
+{% if c.mapping and c.mapping.rationale %}<div class="kw" style="margin-top:6px">{{ c.mapping.rationale }}</div>{% endif %}
+{% if c.mapping and c.mapping.content_notes %}<ul class="tight kw">{% for n in c.mapping.content_notes %}<li>{{ n }}</li>{% endfor %}</ul>{% endif %}
+</div>
+{% else %}<div class="card">No new landing pages recommended.</div>{% endfor %}
+</div>
+
+<h2 id="supporting">Supporting content (topical authority)</h2>
+<div class="scroll"><table>
+<tr><th>#</th><th>Topic</th><th class="r">Volume</th><th class="r">KD</th><th class="r">Business</th><th>Format</th><th>Other keywords</th></tr>
+{% for c in supporting %}
+<tr><td>{{ c.rank }}</td><td><b>{{ c.primary_keyword }}</b></td><td class="r">{{ c.volume|num }}</td><td class="r">{{ c.kd|num }}</td><td class="r">{{ c.business_score|num }}</td>
+<td>{{ (c.mapping and c.mapping.recommended_page_type) or "article" }}</td><td class="kw">{{ c.keywords[1:6]|join(", ") }}</td></tr>
+{% else %}<tr><td colspan="7">None.</td></tr>{% endfor %}
+</table></div>
+
+{% if consolidate %}
+<h2 id="consolidate">Cannibalisation</h2>
+<div class="scroll"><table><tr><th>Cluster</th><th class="r">Volume</th><th>Competing URLs</th></tr>
+{% for c in consolidate %}<tr><td><b>{{ c.primary_keyword }}</b></td><td class="r">{{ c.volume|num }}</td>
+<td>{% for u in c.own_urls[:4] %}<div>{{ u.url|path }} <span class="kw">best #{{ u.best }}, {{ u.keywords }} kw</span></div>{% endfor %}</td></tr>{% endfor %}
+</table></div>
+{% endif %}
+
+<h2 id="ignored">High-volume clusters deliberately ignored</h2>
+<div class="sub">Easy traffic that would not bring buyers. Listed so you can overrule the model.</div>
+<div class="scroll"><table><tr><th>Cluster</th><th class="r">Volume</th><th class="r">SEO</th><th class="r">Business</th><th>Why</th></tr>
+{% for c in ignored %}<tr><td>{{ c.primary_keyword }}</td><td class="r">{{ c.volume|num }}</td><td class="r">{{ c.seo_score|num }}</td><td class="r">{{ c.business_score|num }}</td><td class="kw">{{ c.action_reason }}</td></tr>
+{% else %}<tr><td colspan="5">None.</td></tr>{% endfor %}</table></div>
+
+<h2 id="competitors">Competitors</h2>
+<div class="scroll"><table><tr><th>Domain</th><th>Source</th><th class="r">Shared keywords</th><th>Used</th><th>Why</th></tr>
+{% for c in competitors[:25] %}<tr><td>{{ c.domain }}</td><td>{{ c.source }}</td><td class="r">{{ c.intersections|num }}</td>
+<td>{{ "✓" if c.selected else "" }}</td><td class="kw">{{ c.reason }}</td></tr>{% endfor %}</table></div>
+
+<h2 id="method">Method &amp; cost</h2>
+<div class="grid2">
+<div class="card"><h3>Scoring weights</h3>
+<div class="kw">SEO opportunity = demand {{ weights.demand }} · feasibility {{ weights.feasibility }} · existing rank {{ weights.existing_rank }} · competitor gap {{ weights.competitor_gap }} · trend {{ weights.trend }}<br>
+Business value = relevance {{ weights.relevance }} · intent {{ weights.intent }} · CPC {{ weights.cpc }}<br>
+Priority = √(SEO × Business). Order = priority × (1 − 0.3 × effort/100).</div>
+<h3 style="margin-top:12px">Keywords dropped</h3>
+<div class="kw">{% for k, v in drops.items() %}<span class="pill">{{ k }}: {{ v|num }}</span>{% endfor %}</div></div>
+<div class="card"><h3>Pipeline</h3>
+<table>{% for name, m in phases.items() %}<tr><td>{{ name }}</td><td class="kw">{% for k, v in m.items() if k != 'seconds' %}{{ k }}={{ v }} {% endfor %}</td><td class="r">{{ m.seconds }}s</td></tr>{% endfor %}</table>
+<div style="margin-top:10px"><b>API spend:</b> {% for p, v in cost.items() %}<span class="pill">{{ p }} ${{ '%.3f'|format(v) }}</span>{% else %}cached only{% endfor %}</div></div>
+</div>
+
+</div></body></html>

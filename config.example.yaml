@@ -1,0 +1,64 @@
+# Copy to config.yaml and edit. Only `domain` is required; everything else has defaults.
+domain: example.com
+country: India            # DataForSEO location_name  (e.g. "United States", "United Kingdom")
+language: English         # DataForSEO language_name
+language_code: en
+
+# Business context - the more you give, the better the relevance scoring.
+business_type: B2B SaaS
+goal: generate qualified leads
+target_customer: data engineering and data governance teams at mid-size companies
+products: []              # e.g. ["data catalog", "data lineage"]
+competitors: []           # business competitors you already know (always included)
+brand_terms: []           # your brand/product names - brand keywords are excluded from opportunities
+exclude_keywords: []      # extra negative terms on top of the defaults (jobs, salary, course, pdf, ...)
+
+# How much each intent is worth to THIS business (0-100). E-commerce might raise transactional,
+# a publisher might raise informational.
+intent_value:
+  transactional: 100
+  commercial: 85
+  informational: 50
+  navigational: 20
+
+llm:
+  # Any model id from https://openrouter.ai/models
+  fast: z-ai/glm-5.3-flash        # thousands of keywords -> cheap model
+  smart: z-ai/glm-5.3-flash    # site summary, competitor vetting, page mapping (low volume)
+  temperature: 0
+
+limits:
+  max_crawl_pages: 100
+  max_competitors: 5
+  competitor_keywords_per_domain: 1000
+  own_ranked_keywords: 2000
+  keywords_for_site: 1000
+  keyword_ideas: 1000
+  suggestion_seeds: 10
+  suggestions_per_seed: 200
+  max_candidates: 5000
+  min_search_volume: 10
+  serp_checks: 50
+  llm_mapping_clusters: 150
+  max_cost_usd: 10          # hard stop on DataForSEO spend for one run
+  llm_workers: 12           # concurrent OpenRouter calls (1 disables parallelism)
+  dataforseo_workers: 5     # concurrent DataForSEO calls; provider limit is 30
+
+weights:
+  # SEO opportunity
+  demand: 0.30
+  feasibility: 0.30
+  existing_rank: 0.20
+  competitor_gap: 0.10
+  trend: 0.10
+  # Business value
+  relevance: 0.55
+  intent: 0.30
+  cpc: 0.15
+
+thresholds:
+  ignore_below_business_value: 35
+  quick_win_positions: [4, 30]
+  quick_win_max_kd: 60
+  strategic_min_kd: 60
+  min_relevance_to_keep: 2

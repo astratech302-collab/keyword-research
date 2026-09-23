@@ -1,0 +1,158 @@
+# kwresearch config for Algoscale (https://algoscale.com)
+# Run:  kwresearch run --config configs/algoscale.com.yaml
+#
+# Business summary (from the site, Sep 2026): Newark-headquartered B2B consultancy
+# delivering enterprise data platforms, analytics/BI, AI and product engineering,
+# with delivery operations in India and a regional hub in the UAE. No public pricing.
+
+domain: algoscale.com
+country: United States
+language: English
+language_code: en
+
+business_type: B2B enterprise data, AI, analytics and product engineering consultancy
+goal: >-
+  qualified leads and consultation requests - rank service, solution and industry pages
+  for high-intent US searches; use case studies, whitepapers and blog content to support
+  evaluation journeys and demonstrate delivery expertise
+target_customer: >-
+  US mid-market and enterprise CTOs, CDOs, data leaders and business executives in
+  healthcare, financial services, retail, manufacturing, insurance, logistics and SaaS
+  who need to modernize data platforms, operationalize AI or build scalable software
+
+# Core services - seeds for the site model and relevance scoring.
+products:
+  - data strategy consulting
+  - data warehouse consulting
+  - data lake and lakehouse services
+  - data engineering and ETL services
+  - big data consulting
+  - data governance consulting
+  - business intelligence and analytics
+  - Power BI consulting
+  - Microsoft Fabric consulting
+  - Snowflake consulting
+  - AI consulting
+  - AI as a service
+  - AI agent development
+  - generative AI development
+  - custom software development
+  - full stack development
+  - MVP development services
+  - mobile app development
+  - legacy application modernization
+
+# US-based specialists verified to sell overlapping enterprise data and AI services.
+# The pipeline also discovers SEO competitors automatically and vets them.
+competitors:
+  - decisionminds.com
+  - thirdeyedata.ai
+  - intellectyx.com
+
+brand_terms:
+  - algoscale
+  - algo scale
+  - algoscale technologies
+
+# Publishers, directories, marketplaces, platform vendors and global consultancies are
+# visible in search but are poor strategy comparators. This list replaces the defaults.
+exclude_domains:
+  - wikipedia.org
+  - youtube.com
+  - reddit.com
+  - quora.com
+  - linkedin.com
+  - medium.com
+  - facebook.com
+  - instagram.com
+  - x.com
+  - twitter.com
+  - pinterest.com
+  - google.com
+  - amazon.com
+  - walmart.com
+  - target.com
+  - ebay.com
+  - etsy.com
+  - wayfair.com
+  - homedepot.com
+  - yelp.com
+  - g2.com
+  - capterra.com
+  - gartner.com
+  - microsoft.com
+  - databricks.com
+  - snowflake.com
+  - accenture.com
+  - deloitte.com
+  - ibm.com
+  - capgemini.com
+  - cognizant.com
+
+# Added on top of the default negatives (jobs, salary, course, pdf, login, ...).
+exclude_keywords:
+  - free download
+  - crack
+  - open source
+  - tutorial
+  - github
+
+# B2B services: consultation and vendor-evaluation searches carry the most value.
+intent_value:
+  transactional: 100
+  commercial: 85
+  informational: 50
+  navigational: 20
+
+# Skip WordPress archives, feeds, utilities and query-string variants.
+crawl_exclude:
+  - ^/tag/
+  - ^/author/
+  - ^/category/
+  - ^/wp-
+  - /feed/?$
+  - '\?'
+  - ^/(contact|careers)/?$
+  - ^/(privacy-policy|terms-and-conditions|cookie-policy)/?$
+  - ^/thank-you/?$
+
+llm:
+  fast: z-ai/glm-5.3-flash      # check ids at https://openrouter.ai/models
+  smart: z-ai/glm-5.3-flash
+  temperature: 0
+
+limits:
+  max_crawl_pages: 100
+  max_competitors: 5
+  competitor_keywords_per_domain: 1000
+  own_ranked_keywords: 2000
+  keywords_for_site: 1000
+  keyword_ideas: 1000
+  suggestion_seeds: 10
+  suggestions_per_seed: 200
+  max_candidates: 5000
+  min_search_volume: 10
+  serp_checks: 60
+  llm_mapping_clusters: 150
+  max_cost_usd: 5                      # first run: raise only after reviewing the output
+  llm_workers: 12
+  dataforseo_workers: 5
+
+weights:
+  # SEO opportunity
+  demand: 0.30
+  feasibility: 0.30
+  existing_rank: 0.20
+  competitor_gap: 0.10
+  trend: 0.10
+  # Business value
+  relevance: 0.55
+  intent: 0.30
+  cpc: 0.15
+
+thresholds:
+  ignore_below_business_value: 35
+  quick_win_positions: [4, 30]
+  quick_win_max_kd: 60
+  strategic_min_kd: 60
+  min_relevance_to_keep: 2
