@@ -8,6 +8,7 @@ from typing import Callable
 
 from .clients.dataforseo import BudgetExceeded
 from .context import Ctx
+from . import gsc
 from .pipeline import (cluster, competitors, discovery, enrich, filter as kwfilter, footprint,
                        mapping, scoring, serp, site)
 from .report import render
@@ -15,6 +16,7 @@ from .report import render
 log = logging.getLogger(__name__)
 
 PHASES: list[tuple[str, Callable[[Ctx], dict]]] = [
+    ("gsc", gsc.run),                    # optional Search Console CSV import
     ("site", site.run),                  # 1  crawl + site model
     ("footprint", footprint.run),        # 2  existing rankings
     ("competitors", competitors.run),    # 3  discover + vet + competitor keywords
@@ -32,6 +34,10 @@ PHASES: list[tuple[str, Callable[[Ctx], dict]]] = [
 
 def run_pipeline(ctx: Ctx, only: list[str] | None = None, force: list[str] | None = None) -> dict:
     force = force or []
+    if ctx.gsc_csv and ctx.db.phase_done(ctx.run_id, "gsc"):
+        previous = ctx.db.phase_meta(ctx.run_id).get("gsc", {}).get("_input_hashes", [])
+        if previous != gsc.input_hashes(ctx.gsc_csv):
+            raise ValueError("Search Console CSV differs from this run; start a new run without --resume")
     results: dict[str, dict] = {}
     selected = [(name, fn) for name, fn in PHASES if not only or name in only]
     total = len(selected)
@@ -68,5 +74,6 @@ def run_pipeline(ctx: Ctx, only: list[str] | None = None, force: list[str] | Non
         log.info("[%d/%d %s] %s %s", phase_no, total, name, status,
                  json.dumps(meta, default=str)[:400])
     ctx.db.finish_run(ctx.run_id, "partial" if ctx.cache.get("budget_hit") else "done")
-    log.info("Run #%s finished. API spend: %s", ctx.run_id, ctx.db.run_cost(ctx.run_id))
+    log.info("Run #%s finished. Recorded API spend: %s", ctx.run_id,
+             ctx.db.run_cost_summary(ctx.run_id))
     return results

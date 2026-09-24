@@ -14,6 +14,7 @@ from bs4 import BeautifulSoup
 from ..clients.llm import batched
 from ..context import Ctx
 from ..parallel import parallel_map
+from ..gsc import page_key
 
 log = logging.getLogger(__name__)
 
@@ -126,7 +127,8 @@ def crawl(ctx: Ctx, fetch: Fetch | None = None) -> list[dict]:
         return bool(SKIP_EXT.search(u) or SKIP_PATH.search(path) or any(r.search(path) for r in user_skip))
 
     urls = [u for u in urls if not skip(u)]
-    urls.sort(key=lambda u: (url_priority(u), len(u)))
+    gsc = {r["key"]: r for r in ctx.db.query("SELECT * FROM gsc_pages WHERE run_id=?", (ctx.run_id,))}
+    urls.sort(key=lambda u: (url_priority(u), -(gsc.get(page_key(u)) or {}).get("impressions", 0), len(u)))
     queue = deque([base + "/"] + urls)
     seen: set[str] = set()
     pages: list[dict] = []
@@ -193,9 +195,13 @@ own website pages. Do not invent products that the pages do not support."""
 
 def build_site_model(ctx: Ctx, pages: list[dict]) -> dict:
     cfg = ctx.cfg
-    key_pages = sorted(pages, key=lambda p: (url_priority(p["url"]), -p.get("conversion_value", 0)))[:25]
+    gsc = {r["key"]: r for r in ctx.db.query("SELECT * FROM gsc_pages WHERE run_id=?", (ctx.run_id,))}
+    key_pages = sorted(pages, key=lambda p: (url_priority(p["url"]),
+                                             -(gsc.get(page_key(p["url"])) or {}).get("impressions", 0),
+                                             -p.get("conversion_value", 0)))[:25]
     digest = [{"url": p["url"], "type": p.get("page_type"), "title": p["title"], "h1": p["h1"],
-               "meta": p["meta"], "topics": p.get("topics"), "excerpt": p["text_excerpt"][:500]}
+               "meta": p["meta"], "topics": p.get("topics"), "excerpt": p["text_excerpt"][:500],
+               "gsc_impressions": (gsc.get(page_key(p["url"])) or {}).get("impressions")}
               for p in key_pages]
     hints = {"business_type": cfg.business_type, "goal": cfg.goal, "target_customer": cfg.target_customer,
              "products": cfg.products, "country": cfg.country}

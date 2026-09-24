@@ -38,6 +38,14 @@ CREATE TABLE IF NOT EXISTS rankings (
     is_own INTEGER,
     PRIMARY KEY (run_id, domain, keyword)
 );
+CREATE TABLE IF NOT EXISTS gsc_queries (
+    run_id INTEGER, key TEXT, label TEXT, clicks INTEGER, impressions INTEGER, ctr REAL, position REAL,
+    PRIMARY KEY (run_id, key)
+);
+CREATE TABLE IF NOT EXISTS gsc_pages (
+    run_id INTEGER, key TEXT, label TEXT, clicks INTEGER, impressions INTEGER, ctr REAL, position REAL,
+    PRIMARY KEY (run_id, key)
+);
 CREATE TABLE IF NOT EXISTS keywords (
     run_id INTEGER, keyword TEXT, sources_json TEXT,
     search_volume INTEGER, cpc REAL, competition REAL, kd REAL,
@@ -168,16 +176,35 @@ class DB:
                 self.query("SELECT data_json FROM clusters WHERE run_id=? ORDER BY cluster_id", (run_id,))]
 
     # ---------- api cost ----------
-    def log_call(self, run_id: int | None, provider: str, endpoint: str, cost: float, cached: bool) -> None:
+    def log_call(self, run_id: int | None, provider: str, endpoint: str,
+                 cost: float | None, cached: bool) -> None:
         self.execute("INSERT INTO api_calls VALUES (?,?,?,?,?,?)",
                      (run_id, provider, endpoint, cost, int(cached), time.time()))
         self.commit()
 
-    def run_cost(self, run_id: int) -> dict[str, float]:
+    def run_cost_summary(self, run_id: int) -> dict:
+        """Summarise costs already returned by API calls; never query a provider."""
         rows = self.query(
-            "SELECT provider, SUM(cost) AS c FROM api_calls WHERE run_id=? AND cached=0 GROUP BY provider",
-            (run_id,))
-        return {r["provider"]: round(r["c"] or 0.0, 4) for r in rows}
+            "SELECT provider, COUNT(*) AS calls, SUM(cached) AS cache_hits, "
+            "SUM(CASE WHEN cached=0 AND cost IS NULL THEN 1 ELSE 0 END) AS unpriced_calls, "
+            "COALESCE(SUM(CASE WHEN cached=0 THEN cost END), 0) AS known_usd "
+            "FROM api_calls WHERE run_id=? GROUP BY provider ORDER BY provider", (run_id,))
+        providers = {r["provider"]: {
+            "known_usd": round(r["known_usd"], 8),
+            "calls": r["calls"], "cache_hits": r["cache_hits"],
+            "unpriced_calls": r["unpriced_calls"],
+        } for r in rows}
+        return {
+            "total_usd": round(sum(r["known_usd"] for r in rows), 8),
+            "unpriced_calls": sum(r["unpriced_calls"] for r in rows),
+            "cache_hits": sum(r["cache_hits"] for r in rows),
+            "providers": providers,
+        }
+
+    def run_cost(self, run_id: int) -> dict[str, float]:
+        summary = self.run_cost_summary(run_id)
+        return {provider: data["known_usd"] for provider, data in summary["providers"].items()
+                if data["calls"] > data["cache_hits"]}
 
 
 def _enc(v: Any) -> Any:

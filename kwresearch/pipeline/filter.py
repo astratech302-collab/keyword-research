@@ -32,6 +32,7 @@ def rule_filter(ctx: Ctx) -> dict:
     brand = [b.lower() for b in ctx.site_model().get("brand_terms", []) if len(b) >= 3]
     own_pos = {r["keyword"]: (r["position"], r["url"]) for r in ctx.db.query(
         "SELECT keyword, position, url FROM rankings WHERE run_id=? AND is_own=1", (ctx.run_id,))}
+    gsc = {r["key"]: r for r in ctx.db.query("SELECT key, impressions, position FROM gsc_queries WHERE run_id=?", (ctx.run_id,))}
     latin_lang = cfg.language_code in ("en", "es", "fr", "de", "it", "pt", "nl", "sv", "da", "no", "pl")
     reasons: dict[str, int] = {}
 
@@ -51,7 +52,7 @@ def rule_filter(ctx: Ctx) -> dict:
                 if rx.search(kw):
                     why = f"negative:{t}"
                     break
-        if not why and (r.get("search_volume") or 0) < cfg.limits.min_search_volume and not r.get("own_position"):
+        if not why and (r.get("search_volume") or 0) < cfg.limits.min_search_volume and not r.get("own_position") and not (gsc.get(kw) or {}).get("impressions"):
             why = "low_volume"
         if why:
             r["kept"], r["drop_reason"] = 0, why
@@ -60,7 +61,10 @@ def rule_filter(ctx: Ctx) -> dict:
     kept = [r for r in pool.values() if r["kept"]]
     if len(kept) > cfg.limits.max_candidates:
         # Protect striking-distance rankings, then take the highest-demand keywords.
-        kept.sort(key=lambda r: (0 if (r.get("own_position") or 999) <= 30 else 1, -(r.get("search_volume") or 0)))
+        kept.sort(key=lambda r: (0 if min(r.get("own_position") or 999,
+                                          (gsc.get(r["keyword"]) or {}).get("position") or 999) <= 30 else 1,
+                                 -(r.get("search_volume") or 0),
+                                 -(gsc.get(r["keyword"]) or {}).get("impressions", 0)))
         for r in kept[cfg.limits.max_candidates:]:
             r["kept"], r["drop_reason"] = 0, "over_cap"
         reasons["over_cap"] = len(kept) - cfg.limits.max_candidates

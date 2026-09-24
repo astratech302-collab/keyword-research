@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import math
 import random
 import re
 import time
@@ -18,6 +19,18 @@ OPENROUTER_URL = "https://openrouter.ai/api/v1"
 
 class LLMError(RuntimeError):
     pass
+
+
+def response_cost(usage: Any) -> float | None:
+    """Use OpenRouter's included charge, preserving missing separately from free."""
+    raw = usage.get("cost") if isinstance(usage, dict) else getattr(usage, "cost", None)
+    if raw is None:
+        return None
+    try:
+        cost = float(raw)
+    except (TypeError, ValueError):
+        return None
+    return cost if math.isfinite(cost) and cost >= 0 else None
 
 
 class LLM:
@@ -56,14 +69,15 @@ class LLM:
                 if use_format:
                     kwargs["response_format"] = {"type": "json_object"}
                 resp = self.client.chat.completions.create(**kwargs)
-                text = resp.choices[0].message.content or ""
-                cost = float(getattr(resp.usage, "cost", 0.0) or 0.0) if resp.usage else 0.0
+                cost = response_cost(getattr(resp, "usage", None))
                 self.db.log_call(self.run_id, "openrouter", model, cost, False)
+                text = resp.choices[0].message.content or ""
                 data = extract_json(text)
                 self.db.execute("INSERT OR REPLACE INTO api_cache VALUES (?,?,?,?)",
                                 (key, model, time.time(), json.dumps(data)))
                 self.db.commit()
-                log.info("OpenRouter response: %s cost=$%.4f", model, cost)
+                log.info("OpenRouter response: %s cost=%s", model,
+                         f"${cost:.6f}" if cost is not None else "unavailable")
                 return data
             except Exception as e:  # noqa: BLE001 - provider errors vary
                 last_err = e

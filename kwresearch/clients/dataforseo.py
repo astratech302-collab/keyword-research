@@ -7,6 +7,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import math
 import random
 import threading
 import time
@@ -67,7 +68,12 @@ class DataForSEO:
         self.db = db
         self.run_id = run_id
         self.max_cost = max_cost_usd
-        self.spent = 0.0
+        # A resumed run must retain its earlier spend against the same budget.
+        previous = db.run_cost_summary(run_id)["providers"].get("dataforseo", {}) if run_id is not None else {}
+        self.spent = previous.get("known_usd", 0.0)
+        if previous.get("unpriced_calls"):
+            # Without a returned price the remaining budget cannot be known safely.
+            self.spent = max(self.spent, max_cost_usd)
         self.location_name = location_name
         self.language_name = language_name
         self.language_code = language_code
@@ -92,10 +98,20 @@ class DataForSEO:
 
         self._pace_request()
         data = self._request(endpoint, [task])
-        cost = float(data.get("cost") or 0.0)
+        raw_cost = data.get("cost")
+        try:
+            cost = float(raw_cost) if raw_cost is not None else None
+        except (TypeError, ValueError):
+            cost = None
+        if cost is None or not math.isfinite(cost) or cost < 0:
+            self.db.log_call(self.run_id, "dataforseo", endpoint, None, False)
+            raise DataForSEOError(f"{endpoint}: response did not contain a valid cost; run spend is incomplete")
         with self._budget_lock:
             self.spent += cost
         self.db.log_call(self.run_id, "dataforseo", endpoint, cost, False)
+
+        if data.get("status_code") != 20000:
+            raise DataForSEOError(f"{endpoint}: {data.get('status_code')} {data.get('status_message')}")
 
         t = (data.get("tasks") or [{}])[0]
         code = t.get("status_code")
@@ -132,10 +148,7 @@ class DataForSEO:
                 if r.status_code in (429, 500, 502, 503, 504):
                     raise httpx.HTTPStatusError("retryable", request=r.request, response=r)
                 r.raise_for_status()
-                data = r.json()
-                if data.get("status_code") != 20000:
-                    raise DataForSEOError(f"{endpoint}: {data.get('status_code')} {data.get('status_message')}")
-                return data
+                return r.json()
             except (httpx.TransportError, httpx.HTTPStatusError) as e:
                 if i == attempts - 1:
                     raise DataForSEOError(f"{endpoint}: {e}") from e

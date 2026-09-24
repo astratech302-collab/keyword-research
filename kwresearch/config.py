@@ -41,6 +41,7 @@ class ScoreWeights(BaseModel):
     existing_rank: float = 0.20
     competitor_gap: float = 0.10
     trend: float = 0.10
+    gsc_opportunity: float = 0.10             # added only when query impressions are available
     # Business value (is the traffic worth anything to *this* business)
     relevance: float = 0.55
     intent: float = 0.30

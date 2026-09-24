@@ -1,9 +1,11 @@
 import json
+from types import SimpleNamespace
 
 import httpx
 import pytest
 
-from kwresearch.clients.dataforseo import BudgetExceeded, DataForSEO
+from kwresearch.clients.dataforseo import BudgetExceeded, DataForSEO, DataForSEOError
+from kwresearch.clients.llm import LLM, response_cost
 from kwresearch.db import DB
 
 
@@ -39,6 +41,62 @@ def test_budget_cap(tmp_path):
     c.keyword_suggestions("b")
     with pytest.raises(BudgetExceeded):
         c.keyword_suggestions("c")
+
+
+def test_resume_budget_includes_previous_spend(tmp_path):
+    c, db = make(tmp_path, lambda req: ok([], cost=0.3), max_cost=1.0)
+    db.log_call(1, "dataforseo", "/previous", 0.8, False)
+    resumed = DataForSEO("login", "pw", db, run_id=1, max_cost_usd=1.0)
+    resumed.http = c.http
+    assert resumed.spent == pytest.approx(0.8)
+    resumed.keyword_suggestions("new")
+    with pytest.raises(BudgetExceeded):
+        resumed.keyword_suggestions("another")
+
+
+def test_missing_dataforseo_price_is_visible(tmp_path):
+    def handler(req):
+        return httpx.Response(200, json={"status_code": 20000, "tasks": [
+            {"status_code": 20000, "result": []}]})
+    c, db = make(tmp_path, handler)
+    with pytest.raises(DataForSEOError, match="valid cost"):
+        c.keyword_suggestions("new")
+    summary = db.run_cost_summary(1)
+    assert summary["unpriced_calls"] == 1
+    assert summary["total_usd"] == 0
+    resumed = DataForSEO("login", "pw", db, run_id=1, max_cost_usd=1.0)
+    assert resumed.spent >= resumed.max_cost
+
+
+def test_dataforseo_error_response_still_records_returned_cost(tmp_path):
+    c, db = make(tmp_path, lambda req: httpx.Response(200, json={
+        "status_code": 50000, "status_message": "task rejected", "cost": 0.004, "tasks": []}))
+    with pytest.raises(DataForSEOError, match="task rejected"):
+        c.keyword_suggestions("new")
+    assert db.run_cost_summary(1)["total_usd"] == pytest.approx(0.004)
+
+
+def test_openrouter_uses_response_cost_without_a_lookup(tmp_path):
+    db = DB(tmp_path / "llm.db")
+    replies = iter([
+        SimpleNamespace(usage={"cost": 0.00012345}, choices=[SimpleNamespace(
+            message=SimpleNamespace(content='{"ok":true}'))]),
+        SimpleNamespace(usage=SimpleNamespace(prompt_tokens=10), choices=[SimpleNamespace(
+            message=SimpleNamespace(content='{"ok":true}'))]),
+    ])
+    calls = []
+    llm = object.__new__(LLM)
+    llm.client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(
+        create=lambda **kwargs: (calls.append(kwargs), next(replies))[1])))
+    llm.db, llm.run_id, llm.temperature, llm.use_cache = db, 7, 0.0, False
+    assert llm.json("model", "system", "first") == {"ok": True}
+    assert llm.json("model", "system", "second") == {"ok": True}
+    assert all(call["extra_body"] == {"usage": {"include": True}} for call in calls)
+    summary = db.run_cost_summary(7)
+    assert summary["total_usd"] == pytest.approx(0.00012345)
+    assert summary["unpriced_calls"] == 1
+    assert response_cost({"cost": 0}) == 0
+    assert response_cost(None) is None
 
 
 def test_no_results_is_empty(tmp_path):

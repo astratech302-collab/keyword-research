@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import logging
+import json
 
 from ..clients.dataforseo import parse_keyword_item
 from ..context import Ctx
 from ..parallel import parallel_map
+from ..gsc import page_key
 from . import candidates
 
 log = logging.getLogger(__name__)
@@ -20,6 +22,17 @@ def build_seeds(ctx: Ctx) -> list[str]:
         "SELECT keyword FROM rankings WHERE run_id=? AND is_own=1 AND position<=30 ORDER BY etv DESC LIMIT 60",
         (ctx.run_id,))
     seeds += [r["keyword"] for r in own]
+    observed = ctx.db.query(
+        "SELECT key FROM gsc_queries WHERE run_id=? AND position<=30 "
+        "ORDER BY clicks DESC, impressions DESC LIMIT 60", (ctx.run_id,))
+    seeds += [r["key"] for r in observed]
+    gsc_pages = {r["key"]: r for r in ctx.db.query(
+        "SELECT key, impressions FROM gsc_pages WHERE run_id=?", (ctx.run_id,))}
+    pages = ctx.db.query("SELECT url, topics_json FROM pages WHERE run_id=?", (ctx.run_id,))
+    pages.sort(key=lambda p: -(gsc_pages.get(page_key(p["url"])) or {}).get("impressions", 0))
+    for page in pages[:20]:
+        if page_key(page["url"]) in gsc_pages:
+            seeds.extend(json.loads(page["topics_json"] or "[]"))
     # Competitor keywords that several competitors share are strong category seeds.
     shared = ctx.db.query(
         "SELECT keyword, COUNT(*) n FROM rankings WHERE run_id=? AND is_own=0 AND position<=10 "

@@ -13,6 +13,7 @@ import numpy as np
 from ..clients.llm import batched
 from ..context import Ctx
 from ..parallel import parallel_map
+from ..gsc import page_key
 from .cluster import tokens
 
 log = logging.getLogger(__name__)
@@ -92,6 +93,7 @@ def run(ctx: Ctx, batch_size: int = 8) -> dict:
     clusters = ctx.db.clusters(rid)
     pages = ctx.db.query("SELECT * FROM pages WHERE run_id=?", (rid,))
     page_by_url = {p["url"]: p for p in pages}
+    gsc_pages = {r["key"]: r for r in ctx.db.query("SELECT * FROM gsc_pages WHERE run_id=?", (rid,))}
     cands = candidate_pages(ctx, clusters, pages)
     sm = ctx.site_model()
     business = {k: sm.get(k) for k in ("company", "one_liner", "products", "customers")}
@@ -119,7 +121,10 @@ def run(ctx: Ctx, batch_size: int = 8) -> dict:
                         if c.get("serp") else None,
                 "candidate_pages": [{"url": u, "type": page_by_url.get(u, {}).get("page_type"),
                                      "title": page_by_url.get(u, {}).get("title"),
-                                     "h1": page_by_url.get(u, {}).get("h1")} for u in page_ids],
+                                     "h1": page_by_url.get(u, {}).get("h1"),
+                                     "search_console": {k: (gsc_pages.get(page_key(u)) or {}).get(k)
+                                                        for k in ("clicks", "impressions", "ctr", "position")}
+                                     if page_key(u) in gsc_pages else None} for u in page_ids],
             })
         user = (f"Business: {json.dumps(business)}\nClusters: {json.dumps(payload)}\n\n"
                 'Return {"mappings":[{"cluster_id":1,"outcome":"' + "|".join(OUTCOMES) + '",'

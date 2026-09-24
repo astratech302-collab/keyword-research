@@ -12,6 +12,7 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from ..context import Ctx
+from ..gsc import page_key
 from ..pipeline.scoring import ACTION_LABEL
 
 TEMPLATES = Path(__file__).parent / "templates"
@@ -93,6 +94,9 @@ def build_context(ctx: Ctx) -> dict:
         p["volume"] += c["volume"]
         p["score"] = max(p["score"], c["rank_score"])
     existing_pages = sorted(pages.values(), key=lambda p: -p["score"])
+    gsc_pages = {r["key"]: r for r in db.query("SELECT * FROM gsc_pages WHERE run_id=?", (rid,))}
+    for page in existing_pages:
+        page["gsc"] = gsc_pages.get(page_key(page["url"]))
 
     all_kw = db.keywords(rid, kept_only=False)
     kept = [k for k in all_kw if k["kept"]]
@@ -117,7 +121,7 @@ def build_context(ctx: Ctx) -> dict:
         "new_pages": (by_action["NEW_LANDING_PAGE"] + by_action["STRATEGIC"])[:25],
         "supporting": by_action["SUPPORTING_CONTENT"][:40], "consolidate": by_action["CONSOLIDATE"],
         "ignored": ignored_notable, "competitors": comps, "drops": dict(drops.most_common()),
-        "phases": db.phase_meta(rid), "cost": db.run_cost(rid),
+        "phases": db.phase_meta(rid), "cost": db.run_cost_summary(rid),
         "scatter": scatter_svg(clusters), "action_color": ACTION_COLOR, "action_label": ACTION_LABEL,
         "weights": cfg.weights.model_dump(), "budget_hit": ctx.cache.get("budget_hit", False),
     }
@@ -129,16 +133,20 @@ def write_csvs(ctx: Ctx, out: Path) -> None:
     cmap = {c["cluster_id"]: c for c in clusters}
     with open(out / "keywords.csv", "w", newline="") as f:
         w = csv.writer(f)
+        gsc = {r["key"]: r for r in ctx.db.query("SELECT * FROM gsc_queries WHERE run_id=?", (rid,))}
         w.writerow(["keyword", "cluster_id", "cluster_primary", "search_volume", "cpc", "kd", "intent", "relevance_0_5",
-                    "own_position", "own_url", "trend_12m", "sources", "kept", "drop_reason"])
+                    "own_position", "own_url", "trend_12m", "sources", "kept", "drop_reason",
+                    "gsc_clicks", "gsc_impressions", "gsc_ctr", "gsc_position"])
         for k in ctx.db.keywords(rid, kept_only=False):
             c = cmap.get(k["cluster_id"] or -1, {})
             w.writerow([k["keyword"], k["cluster_id"], c.get("primary_keyword"), k["search_volume"], k["cpc"], k["kd"],
                         k["intent"], k["relevance"], k["own_position"], k["own_url"], k["trend_12m"],
-                        "|".join(json.loads(k["sources_json"] or "[]")), k["kept"], k["drop_reason"]])
+                        "|".join(json.loads(k["sources_json"] or "[]")), k["kept"], k["drop_reason"],
+                        *[(gsc.get(k["keyword"]) or {}).get(field) for field in ("clicks", "impressions", "ctr", "position")]])
     cols = ["rank", "cluster_id", "primary_keyword", "action", "recommendation", "action_reason", "intent", "size",
             "volume", "primary_volume", "kd", "cpc", "best_position", "best_url", "seo_score", "business_score",
-            "priority", "effort", "rank_score", "quadrant", "competitor_coverage"]
+            "priority", "effort", "rank_score", "quadrant", "competitor_coverage",
+            "gsc_clicks", "gsc_impressions", "gsc_position"]
     with open(out / "clusters.csv", "w", newline="") as f:
         w = csv.writer(f)
         w.writerow(cols + ["mapping_outcome", "target_url", "suggested_slug", "page_type", "rationale",

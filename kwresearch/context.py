@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from .config import RunConfig
@@ -16,6 +17,7 @@ class Ctx:
     llm: Any            # LLM (or a fake)
     embedder: Any = None
     cache: dict = field(default_factory=dict)   # in-process memo (embeddings etc.)
+    gsc_csv: list[Path] = field(default_factory=list)
 
     def site_model(self) -> dict:
         import json

@@ -51,6 +51,7 @@ weights:
   existing_rank: 0.20
   competitor_gap: 0.10
   trend: 0.10
+  gsc_opportunity: 0.10                # applies only to clusters with Search Console query data
   # Business value
   relevance: 0.55
   intent: 0.30

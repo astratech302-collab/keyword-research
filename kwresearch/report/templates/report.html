@@ -75,7 +75,7 @@ a{color:inherit}.scroll{overflow-x:auto}
 <tr><th>#</th><th>Cluster</th><th class="r">Volume</th><th class="r">KD</th><th>Intent</th><th class="r">Rank</th><th class="r">SEO</th><th class="r">Business</th><th class="r">Effort</th><th>Action</th><th>Recommendation</th></tr>
 {% for c in top %}
 <tr><td>{{ c.rank }}</td>
-<td class="cl"><b>{{ c.primary_keyword }}</b><div class="kw">{{ c.keywords[1:4]|join(", ") }}{% if c.size > 4 %} +{{ c.size-4 }}{% endif %}</div></td>
+<td class="cl"><b>{{ c.primary_keyword }}</b><div class="kw">{{ c.keywords[1:4]|join(", ") }}{% if c.size > 4 %} +{{ c.size-4 }}{% endif %}</div>{% if c.gsc_impressions %}<div class="kw">Search Console: {{ c.gsc_impressions|num }} impressions · avg position {{ c.gsc_position|num(1) }}</div>{% endif %}</td>
 <td class="r">{{ c.volume|num }}</td><td class="r">{{ c.kd|num }}</td><td>{{ c.intent }}</td>
 <td class="r">{{ c.best_position or "—" }}</td><td class="r">{{ c.seo_score|num }}</td><td class="r">{{ c.business_score|num }}</td><td class="r">{{ c.effort|num }}</td>
 <td><span class="tag" style="background:{{ c.color }}">{{ action_label[c.action] }}</span><div class="kw">{{ c.quadrant }}</div></td>
@@ -94,6 +94,7 @@ a{color:inherit}.scroll{overflow-x:auto}
 {% for p in existing_pages %}
 <div class="card"><h3><a href="{{ p.url }}">{{ p.url|path }}</a></h3>
 <div class="kw">{{ p.volume|num }} combined monthly searches</div>
+{% if p.gsc %}<div class="kw">Search Console page: {{ p.gsc.clicks|num }} clicks · {{ p.gsc.impressions|num }} impressions · avg position {{ p.gsc.position|num(1) }}</div>{% endif %}
 <ul class="tight">{% for c in p.clusters %}
 <li><span class="tag" style="background:{{ c.color }}">{{ c.best_position and '#' ~ c.best_position or 'not ranking' }}</span> <b>{{ c.primary_keyword }}</b> <span class="kw">{{ c.volume|num }}/mo · KD {{ c.kd|num }}</span>
 {% if c.mapping and c.mapping.content_notes %}<ul class="tight kw">{% for n in c.mapping.content_notes %}<li>{{ n }}</li>{% endfor %}</ul>{% endif %}</li>
@@ -151,14 +152,17 @@ a{color:inherit}.scroll{overflow-x:auto}
 <h2 id="method">Method &amp; cost</h2>
 <div class="grid2">
 <div class="card"><h3>Scoring weights</h3>
-<div class="kw">SEO opportunity = demand {{ weights.demand }} · feasibility {{ weights.feasibility }} · existing rank {{ weights.existing_rank }} · competitor gap {{ weights.competitor_gap }} · trend {{ weights.trend }}<br>
+<div class="kw">SEO opportunity = demand {{ weights.demand }} · feasibility {{ weights.feasibility }} · existing rank {{ weights.existing_rank }} · competitor gap {{ weights.competitor_gap }} · trend {{ weights.trend }}{% if phases.gsc.queries %} · Search Console opportunity {{ weights.gsc_opportunity }} (where query data exists){% endif %}<br>
 Business value = relevance {{ weights.relevance }} · intent {{ weights.intent }} · CPC {{ weights.cpc }}<br>
 Priority = √(SEO × Business). Order = priority × (1 − 0.3 × effort/100).</div>
 <h3 style="margin-top:12px">Keywords dropped</h3>
 <div class="kw">{% for k, v in drops.items() %}<span class="pill">{{ k }}: {{ v|num }}</span>{% endfor %}</div></div>
 <div class="card"><h3>Pipeline</h3>
-<table>{% for name, m in phases.items() %}<tr><td>{{ name }}</td><td class="kw">{% for k, v in m.items() if k != 'seconds' %}{{ k }}={{ v }} {% endfor %}</td><td class="r">{{ m.seconds }}s</td></tr>{% endfor %}</table>
-<div style="margin-top:10px"><b>API spend:</b> {% for p, v in cost.items() %}<span class="pill">{{ p }} ${{ '%.3f'|format(v) }}</span>{% else %}cached only{% endfor %}</div></div>
+<table>{% for name, m in phases.items() %}<tr><td>{{ name }}</td><td class="kw">{% for k, v in m.items() if k != 'seconds' and not k.startswith('_') %}{{ k }}={{ v }} {% endfor %}</td><td class="r">{{ m.seconds }}s</td></tr>{% endfor %}</table>
+<div style="margin-top:10px"><b>Recorded API spend for this run:</b> {% if cost.unpriced_calls %}at least {% endif %}${{ '%.6f'|format(cost.total_usd) }}
+{% for provider, data in cost.providers.items() %}<span class="pill">{{ provider }} ${{ '%.6f'|format(data.known_usd) }}</span>{% endfor %}
+{% if cost.unpriced_calls %}<div class="kw">{{ cost.unpriced_calls }} API call(s) did not return a price; the total is incomplete.</div>{% endif %}
+{% if cost.cache_hits %}<div class="kw">{{ cost.cache_hits }} local cache hit(s) added no cost to this run.</div>{% endif %}</div></div>
 </div>
 
 </div></body></html>

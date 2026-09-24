@@ -15,10 +15,13 @@ def save_rankings(ctx: Ctx, domain: str, rows: list[dict], is_own: bool) -> None
 
 
 def run(ctx: Ctx) -> dict:
+    gsc = ctx.db.query("SELECT * FROM gsc_queries WHERE run_id=? ORDER BY impressions DESC", (ctx.run_id,))
+    candidates.add(ctx, [{"keyword": r["key"]} for r in gsc], "gsc_queries")
+    candidates.flush(ctx)
     items = ctx.dfs.ranked_keywords(ctx.cfg.domain, limit=ctx.cfg.limits.own_ranked_keywords)
     rows = [r for r in (parse_ranked_item(i) for i in items) if r]
     save_rankings(ctx, ctx.cfg.domain, rows, is_own=True)
     candidates.add(ctx, rows, "own_ranked")
     candidates.flush(ctx)
     striking = sum(1 for r in rows if r.get("position") and 4 <= r["position"] <= 30)
-    return {"ranked_keywords": len(rows), "striking_distance": striking}
+    return {"ranked_keywords": len(rows), "striking_distance": striking, "gsc_queries": len(gsc)}

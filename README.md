@@ -3,6 +3,7 @@
 Takes a website and returns a prioritised list of **page actions**: which existing pages to improve, which new pages to create, and in what order.
 
 - **DataForSEO (REST)** supplies the facts: volume, CPC, KD, intent, rankings and competitors. It is cached, cost-tracked and capped by a budget.
+- **Optional Search Console CSVs** supply observed queries, page exposure, clicks and average position for the site being researched.
 - **The LLM (via OpenRouter, any model)** makes the judgement calls: business relevance, competitor vetting and cluster-to-page mapping. It never produces a metric.
 - **Deterministic Python** handles everything else: normalisation, clustering, scoring and the report.
 
@@ -21,9 +22,17 @@ open runs_mock/acmelineage_io/run_1/report.html
 cp .env.example .env                    # add DataForSEO login/password + OpenRouter key
 cp config.example.yaml config.yaml      # set domain, country, business context
 kwresearch run --config config.yaml
+
+# Read saved API spend for every Algoscale run; this makes no provider API calls.
+kwresearch costs --config configs/algoscale.com.yaml
+
+# Optional: use Search Console CSV exports (Queries, Pages, or both)
+kwresearch run --config config.yaml --gsc-csv /path/to/Queries.csv --gsc-csv /path/to/Pages.csv
 ```
 
 Each run creates `runs/<domain>/run_<id>/report.html`, `clusters.csv` and `keywords.csv`, plus a SQLite DB at `runs/<domain>/kwresearch.db`. The DB keeps every run, so metric history builds up over time.
+
+`--gsc-csv` accepts a Google Search Console performance CSV with `Top queries` or `Top pages` as its first column, followed by `Clicks,Impressions,CTR,Position`. Repeat the option for both exports. A Pages export like `algoscale.com-google-search-console2026.csv` prioritises observed pages during crawling and provides page performance to mapping. A Queries export adds actual search terms to keyword discovery, keeps terms with observed impressions eligible for relevance review, and uses their observed position and exposure in opportunity scoring. Search Console impressions remain separate from DataForSEO monthly search volume. The report CSVs include the imported query metrics. Supply exports for the domain being researched; use a new run when the CSV content changes. Domain-property exports may include subdomains; only pages on the crawled host affect page selection and mapping.
 
 ### Resuming and re-running
 
@@ -33,7 +42,7 @@ kwresearch run --config config.yaml --resume --force mapping score   # redo phas
 kwresearch report --config config.yaml                           # re-render only
 ```
 
-Resuming is cheap because every DataForSEO and LLM response is cached in the DB. DataForSEO responses are kept for 30 days. LLM responses are keyed by prompt.
+Resuming is cheap because every DataForSEO and LLM response is cached in the DB. DataForSEO responses are kept for 30 days. LLM responses are keyed by prompt. The DataForSEO budget includes spend already recorded for that run before the resume.
 
 The CLI prints overall phase progress plus progress for long-running crawl, keyword, SERP and LLM
 batches. If the process is interrupted, OpenRouter credits run out, or an API call ultimately fails,
@@ -81,10 +90,13 @@ flowchart TD
     ORDER --> REPORT["HTML report + clusters.csv + keywords.csv"]
 
     DFS[("DataForSEO<br/>SEO facts and metrics")]
+    GSC[("Search Console CSV<br/>Queries and Pages")]
     LLM[("OpenRouter LLM<br/>Contextual judgements")]
     DB[("SQLite<br/>Cache, history and checkpoints")]
 
     DFS -. "rankings and metrics" .-> FOOTPRINT
+    GSC -. "page exposure" .-> SITE
+    GSC -. "observed queries" .-> FOOTPRINT
     DFS -. "competitor data" .-> COMPETITORS
     DFS -. "keyword data" .-> DISCOVERY
     DFS -. "missing metrics" .-> ENRICH
@@ -111,16 +123,17 @@ flowchart TD
     class FILTER,MAP decision;
     class OUTCOMES,REPORT result;
     class DROP rejected;
-    class DFS,LLM service;
+    class DFS,LLM,GSC service;
     class DB store;
 ```
 
 | # | Phase | Source | Output |
 |---|-------|--------|--------|
+| 0 | `gsc` | optional Search Console Queries and Pages CSVs | observed query and page metrics for this run |
 | 1 | `site` | crawler + LLM | pages (type, topics, conversion value) and a business model with seed topics |
-| 2 | `footprint` | Labs `ranked_keywords` | what you already rank for (quick-win raw material) |
+| 2 | `footprint` | Labs `ranked_keywords` + optional Search Console queries | what you already rank for (quick-win raw material) |
 | 3 | `competitors` | Labs `competitors_domain` (falls back to `serp_competitors`) + LLM vetting | top N real competitors and their top-20 keywords |
-| 4–5 | `discovery` | `keywords_for_site`, `keyword_ideas`, `keyword_suggestions` | candidate pool |
+| 4–5 | `discovery` | `keywords_for_site`, `keyword_ideas`, `keyword_suggestions`, observed queries and page topics | candidate pool |
 | 6 | `filter` | rules, then LLM relevance scored 0–5 (fast model, 150 keywords per call) | relevant keywords |
 | 7 | `enrich` | `bulk_keyword_difficulty`, `search_intent` for **gaps only** | complete metrics + history rows |
 | 9–10 | `cluster` | intent split → lexical/core_keyword units → embeddings (agglomerative) | clusters + primary keyword |
@@ -141,6 +154,8 @@ Order           = Priority × (1 − 0.3 × Effort/100)
 
 Existing-rank points: positions 11–20 = 100, 4–10 = 70, 21–30 = 60, 31–50 = 40, >50 = 15, 1–3 = 10 (little upside left).
 
+When query CSV data is present, Search Console average position fills the existing-rank signal if no DataForSEO ranking is known. Observed query impressions and position add a configurable `weights.gsc_opportunity` signal (default 0.10) only to clusters with query data. Impressions are not treated as monthly search volume.
+
 Actions: `QUICK_WIN`, `OPTIMIZE_EXISTING`, `CONSOLIDATE`, `NEW_LANDING_PAGE`, `SUPPORTING_CONTENT`, `STRATEGIC`, `MAINTAIN`, `IGNORE`. All weights, thresholds and intent values live in `config.yaml`.
 
 ## Cost control
@@ -148,7 +163,8 @@ Actions: `QUICK_WIN`, `OPTIMIZE_EXISTING`, `CONSOLIDATE`, `NEW_LANDING_PAGE`, `S
 - `limits.max_cost_usd` is a hard stop on DataForSEO spend. When it hits, the pipeline finishes with cached data and flags the report as partial.
 - SERP calls cover only `serp_checks` clusters, and LLM mapping covers only `llm_mapping_clusters`.
 - Rule filters run before the LLM, and `max_candidates` caps what the LLM sees.
-- The "Method & cost" section of the report shows actual spend per provider.
+- The "Method & cost" section of the report shows the recorded total and spend per provider. `kwresearch costs --config configs/algoscale.com.yaml` lists the cost of each saved run; add `--run-id N` for one run. This command reads SQLite only and never contacts DataForSEO or OpenRouter.
+- Costs come from the original [DataForSEO response's `cost` field](https://docs.dataforseo.com/v3/dataforseo_labs-keyword_suggestions-live/) and [OpenRouter's included `usage.cost`](https://openrouter.ai/blog/announcements/smarter-charts-inline-svgs-and-live-usage-accounting/). Local cache hits add no new run cost. If a response omits its price, the report marks the total as incomplete instead of counting that request as free. Requests that fail without any provider response cannot be reconciled from local data. Older runs may contain zero values recorded by the previous version when OpenRouter omitted a price.
 
 ## Layout
 

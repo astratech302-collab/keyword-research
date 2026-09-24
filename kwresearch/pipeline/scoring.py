@@ -21,7 +21,7 @@ def _wavg(pairs: list[tuple[float | None, float]], default: float | None = None)
     return num / den if den else default
 
 
-def rank_score(pos: int | None) -> float:
+def rank_score(pos: float | None) -> float:
     if not pos:
         return 0
     if pos <= 3:
@@ -46,6 +46,7 @@ def cluster_metrics(ctx: Ctx) -> list[dict]:
     ranks: dict[str, list[dict]] = defaultdict(list)
     for r in ctx.db.query("SELECT * FROM rankings WHERE run_id=?", (rid,)):
         ranks[r["keyword"]].append(r)
+    gsc = {r["key"]: r for r in ctx.db.query("SELECT * FROM gsc_queries WHERE run_id=?", (rid,))}
 
     for c in clusters:
         members = [kw[k] for k in c["keywords"] if k in kw]
@@ -61,6 +62,10 @@ def cluster_metrics(ctx: Ctx) -> list[dict]:
         c["cpc"] = round(_wavg([(m.get("cpc"), wi) for m, wi in zip(members, w)], 0.0), 2)
         c["relevance"] = _wavg([(m.get("relevance"), wi) for m, wi in zip(members, w)], 2.5)
         c["trend"] = _wavg([(m.get("trend_12m") or m.get("trend_3m"), wi) for m, wi in zip(members, w)])
+        observed = [gsc[m["keyword"]] for m in members if m["keyword"] in gsc]
+        c["gsc_clicks"] = sum(r["clicks"] for r in observed)
+        c["gsc_impressions"] = sum(r["impressions"] for r in observed)
+        c["gsc_position"] = _wavg([(r["position"], r["impressions"]) for r in observed])
 
         own_urls: dict[str, dict] = {}
         comp_best: dict[str, int] = {}
@@ -91,6 +96,7 @@ def seo_business_scores(ctx: Ctx, clusters: list[dict]) -> None:
     W = cfg.weights
     maxv = max((c["volume"] for c in clusters), default=1) or 1
     cpcs = sorted(c["cpc"] or 0 for c in clusters)
+    max_gsc = max((c.get("gsc_impressions") or 0 for c in clusters), default=0)
 
     def pct(v: float) -> float:
         if not cpcs:
@@ -102,7 +108,7 @@ def seo_business_scores(ctx: Ctx, clusters: list[dict]) -> None:
         s: dict[str, float] = {}
         s["demand"] = 100 * math.log1p(c["volume"]) / math.log1p(maxv)
         s["feasibility"] = 100 - (c["kd"] if c["kd"] is not None else 50)
-        s["existing_rank"] = rank_score(c["best_position"])
+        s["existing_rank"] = rank_score(c["best_position"] or c.get("gsc_position"))
         ranks_well = c["best_position"] is not None and c["best_position"] <= 20
         s["competitor_gap"] = 100 * c["competitor_coverage"] * (0.5 if ranks_well else 1.0)
         t = c["trend"]
@@ -110,9 +116,16 @@ def seo_business_scores(ctx: Ctx, clusters: list[dict]) -> None:
         s["relevance"] = 100 * (c["relevance"] or 0) / 5
         s["intent"] = float(cfg.intent_value.get(c["intent"], 50))
         s["cpc"] = pct(c["cpc"] or 0)
-        seo = (W.demand * s["demand"] + W.feasibility * s["feasibility"] + W.existing_rank * s["existing_rank"]
-               + W.competitor_gap * s["competitor_gap"] + W.trend * s["trend"])
-        seo /= (W.demand + W.feasibility + W.existing_rank + W.competitor_gap + W.trend)
+        seo_total = (W.demand * s["demand"] + W.feasibility * s["feasibility"] + W.existing_rank * s["existing_rank"]
+                     + W.competitor_gap * s["competitor_gap"] + W.trend * s["trend"])
+        seo_weight = W.demand + W.feasibility + W.existing_rank + W.competitor_gap + W.trend
+        if c.get("gsc_impressions") and max_gsc:
+            # Search Console impressions are observed exposure, not monthly search volume.
+            visibility = math.log1p(c["gsc_impressions"]) / math.log1p(max_gsc)
+            s["gsc_opportunity"] = visibility * rank_score(c.get("gsc_position"))
+            seo_total += W.gsc_opportunity * s["gsc_opportunity"]
+            seo_weight += W.gsc_opportunity
+        seo = seo_total / seo_weight
         biz = (W.relevance * s["relevance"] + W.intent * s["intent"] + W.cpc * s["cpc"]) / \
               (W.relevance + W.intent + W.cpc)
         c["subscores"] = {k: round(v, 1) for k, v in s.items()}
